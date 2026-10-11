@@ -1,34 +1,45 @@
 import { test, expect } from '@playwright/test';
-import {WidgetPage} from "./widget.page";
+import { WidgetPage } from './widget.page';
 
-test.describe('Uchi.ru widget ', () => {
+test.describe('Uchi.ru widget', () => {
   let widgetPage: WidgetPage;
 
-  test.beforeEach(async ({page}) => {
+  test.beforeEach(async ({ page }) => {
     widgetPage = new WidgetPage(page);
 
-    // open uchi.ru main page
-    await page.goto('/');
+    const cookieButtons = page.locator('._UCHI_COOKIE__button:visible');
+    await page.addLocatorHandler(cookieButtons.first(), async () => {
+      // Баннер может двигаться или исчезнуть во время проверки.
+      await cookieButtons.evaluateAll(buttons => {
+        for (const button of buttons) {
+          if (button.isConnected) (button as HTMLElement).click();
+        }
+      });
+    }, { noWaitAfter: true });
 
-    // close cookies popup
-    await page.click('._UCHI_COOKIE__button');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
   });
 
-  test('opens', async ({page}) => {
+  test('opens', async () => {
     await widgetPage.openWidget();
 
-    await expect(widgetPage.getWidgetBody()).toBeVisible()
+    await expect(widgetPage.getWidgetBody()).toBeVisible();
   });
 
-  test('has correct title', async ({ page }) => {
+  test('opens support form from a popular article', async () => {
     await widgetPage.openWidget();
 
-    const articles = await widgetPage.getPopularArticles();
-
-    await articles[0].click();
-
+    await widgetPage.getPopularArticles().first().click();
     await widgetPage.clickWriteToUs();
 
-    expect(await widgetPage.getTitle()).toEqual('Связь с поддержкой');
+    await expect(widgetPage.getTitle()).toHaveText('Связь с поддержкой');
+  });
+
+  test('shows popular articles', async () => {
+    await widgetPage.openWidget();
+
+    const firstArticle = widgetPage.getPopularArticles().first();
+    await expect(firstArticle).toBeVisible();
+    await expect(firstArticle).toHaveText(/\S/);
   });
 });
